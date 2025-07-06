@@ -2,10 +2,18 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-interface TemplateItem extends vscode.QuickPickItem
-{
-	// filename: string; // 创建文件名字
-	// content: string;
+// interface TemplateItem extends vscode.QuickPickItem
+// {
+// 	// filename: string;
+// 	// content: string;
+// }
+
+function toPascalCase(name: string): string {
+  return name
+    .replace(/[-_ ]+/g, ' ')                     // 把 - _ 等转换为空格
+    .split(' ')                                  // 分词
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // 首字母大写
+    .join('');                                   // 重新拼接为 PascalCase
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -20,7 +28,18 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			// 定义选择标签
-			const fileTemplates: TemplateItem[] = [
+			// const fileTemplates: TemplateItem[] = [
+			// 	{
+			// 		label: "Models"
+			// 	},
+			// 	{
+			// 		label: "Views"
+			// 	},
+			// 	{
+			// 		label: "ViewModels"
+			// 	}
+			// ];
+			const fileTemplates = [
 				{
 					label: "Models"
 				},
@@ -41,10 +60,9 @@ export function activate(context: vscode.ExtensionContext) {
 				vscode.window.showWarningMessage("Canceling");
 				return;
 			}
-			vscode.window.showInformationMessage(`你选择了: ${pick.label}`);
 
 			// 定义文件名称输入
-			const filename = await vscode.window.showInputBox({
+			let filename = await vscode.window.showInputBox({
 				prompt: 'File Name without ',
 				placeHolder: '',
 				validateInput: (value) => {
@@ -57,20 +75,46 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
+			filename = toPascalCase(filename);
+
+
 			const workspaceRoot = folders[0].uri.fsPath;
 			const templateDir = path.join(context.extensionPath, 'templates');
 			const workspaceName = vscode.workspace.name || "";
 
 			const replacements = {
-				'{{fileName}}': `${filename}`,
-				'{{namespaceName}}': path.join(workspaceName, pick.label)
+				'{{filename}}': `${filename}`,
+				'{{namespace}}': `${workspaceName}.${pick.label}`
 			};
 
-			switch (pick.label)
+			const tplTypeFileMap: Record<string, string[]> = {
+				ViewModels: ['viewmodels.cs.tpl'],
+				Views: ['views.axaml.tpl', 'views.cs.tpl'],
+				Models: ['models.cs.tpl'],
+			};
+
+			const filesToCreate = tplTypeFileMap[pick.label];
+
+			if (!filesToCreate)
 			{
-				case "View":
-					
+				vscode.window.showErrorMessage(`Error Type ${pick.label}`);
+				return;
 			}
+
+			for (const file of filesToCreate)
+			{
+				const tplPath = path.join(templateDir, file);
+				const content = fs.readFileSync(tplPath, 'utf8');
+				const replacedContent = Object.entries(replacements).reduce(
+					(acc, [key, val]) => acc.replace(new RegExp(key, 'g'), val),
+					content
+				);
+				const filePath = path.join(workspaceRoot, pick.label, `${filename}.${file.split('.')[1]}`);
+				fs.writeFileSync(filePath, replacedContent, 'utf8');
+				const newDoc = await vscode.workspace.openTextDocument(filePath);
+				vscode.window.showTextDocument(newDoc);
+			}
+
 		}
 	);
 	context.subscriptions.push(disposable);

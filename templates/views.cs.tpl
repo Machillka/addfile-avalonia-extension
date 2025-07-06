@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace {{namespacename}}
+namespace {{namespace}};
 
 public partial class {{filename}} : Window
 {
